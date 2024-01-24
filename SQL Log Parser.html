@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Log Parser</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #dfdddd;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .sql-processor {
+            display: flex;
+            width: 100%;
+            height: calc(100vh - 40px);
+        }
+
+        .sql-processor__section {
+            flex: 1;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .sql-processor__textarea {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #dddd;
+            border-radius: 4px;
+            resize: none;
+            font-size: 14px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        .sql-processor__copy-icon {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            cursor: pointer;
+            font-size: 20px;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="sql-processor">
+        <div class="sql-processor__section">
+            <textarea 
+                id="inputSql" 
+                class="sql-processor__textarea" 
+                placeholder="Вставьте скрипт из логов, включая строчки с значением переменных сюда" 
+                oninput="processQuery()">
+            </textarea>
+        </div>
+
+        <div class="sql-processor__section" style="position: relative;">
+            <textarea 
+                id="outputSql" 
+                class="sql-processor__textarea" 
+                readonly 
+                placeholder="Вывод скрипта с проставленными переменными">
+            </textarea>
+            <span 
+                class="sql-processor__copy-icon" 
+                onclick="copyToClipboard()" title="Copy to Clipboard">📋
+            </span>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            clearInputOutput();
+        };
+        function clearInputOutput() {
+            document.getElementById('inputSql').value = '';
+            document.getElementById('outputSql').value = '';
+        }
+        
+        function processQuery() {
+            const input = document.getElementById('inputSql').value;
+            const output = processSQLWithLogs(input);
+            document.getElementById('outputSql').value = output;
+        }
+
+        function copyToClipboard() {
+            const outputSql = document.getElementById('outputSql');
+            outputSql.select();
+            document.execCommand('copy');
+        }
+
+        function processSQLWithLogs(input) {
+            // Разделяем ввод на SQL запрос и логи
+            const separatorIndex = input.indexOf("ObjMgrSqlLog");
+            const sql = input.substring(0, separatorIndex).trim();
+            const logs = input.substring(separatorIndex);
+
+            // Разбиваем логи на строки
+            const logLines = logs.split('\n').filter(line => line.includes('Bind variable'));
+
+            // Объект для хранения переменных
+            const variables = {};
+
+            // Извлекаем значения переменных из логов
+            logLines.forEach(line => {
+                const match = line.match(/Bind variable (\d+): ([^,]+)/);
+                if (match) {
+                    const varNumber = parseInt(match[1], 10);
+                    const varValue = match[2].trim();
+                    variables[varNumber] = varValue;
+                }
+            });
+
+            // Заменяем переменные в SQL-запросе и удаляем первую переменную, если это необходимо
+            let isFirstVariableProcessed = false;
+            return sql.replace(/,?\s*:\d+/g, match => {
+                const varNumber = parseInt(match.match(/:(\d+)/)[1], 10);
+
+                if (isFirstVariableProcessed === false) {
+                    isFirstVariableProcessed = true;
+                    if (varNumber === 1) {
+                        // Удаляем переменную вместе с предшествующей запятой (если она есть)
+                        return '';
+                    }
+                }
+
+                const value = variables[varNumber];
+                // Если значение не определено, оставляем местозаполнитель без изменений
+                if (!value) {
+                    return match;
+                }
+                // Если значение является числом, возвращаем его как есть, иначе добавляем кавычки
+                return isNaN(value) ? `'${value}'` : value;
+            });
+}
+
+    </script>
+</body>
+</html>

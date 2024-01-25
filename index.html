@@ -47,6 +47,25 @@
             opacity: 0.75;
             color: #000000;
         }
+
+        /* Стили для скроллбара */
+        .sql-processor__textarea::-webkit-scrollbar {
+            width: 5px; /* Ширина скроллбара */
+        }
+
+        .sql-processor__textarea::-webkit-scrollbar-track {
+            background: #f1f1f1; /* Цвет дорожки скроллбара */
+        }
+
+        .sql-processor__textarea::-webkit-scrollbar-thumb {
+            background: #888; /* Цвет самого скроллбара */
+            border-radius: 5px; /* Скругление углов скроллбара */
+        }
+
+        .sql-processor__textarea::-webkit-scrollbar-thumb:hover {
+            background: #555; /* Цвет скроллбара при наведении */
+        }
+
     </style>
 </head>
 <body>

@@ -102,83 +102,111 @@
     </div>
 
     <script>
-window.onload = function() {
-    clearInputOutput();
-    updateCopyIconVisibility();
-};
-
-function updateCopyIconVisibility() {
-    const outputSql = document.getElementById('outputSql').value;
-    const copyIcon = document.getElementById('copyIcon');
-    if (outputSql) {
-        copyIcon.style.display = 'block';
-    } else {
-        copyIcon.style.display = 'none';
-    }
-}
-
-function clearInputOutput() {
-    document.getElementById('inputSql').value = '';
-    document.getElementById('outputSql').value = '';
-}
-
-function processQuery() {
-    const input = document.getElementById('inputSql').value;
-    const output = processSQLWithLogs(input);
-    document.getElementById('outputSql').value = output;
-    updateCopyIconVisibility();
-}
-
-function copyToClipboard() {
-    const outputSql = document.getElementById('outputSql');
-    outputSql.select();
-    document.execCommand('copy');
-}
-
-function processSQLWithLogs(input) {
-    // Разделяем ввод на SQL запрос и логи
-    const separatorIndex = input.indexOf("ObjMgrSqlLog");
-    const sql = input.substring(0, separatorIndex).trim();
-    const logs = input.substring(separatorIndex);
-
-    // Разбиваем логи на строки, выбираем только те, где есть 'Bind variable'
-    const logLines = logs.split('\n').filter(line => line.includes('Bind variable'));
-
-    // Объект для хранения переменных
-    const variables = {};
-
-    // Извлекаем значения переменных из логов
-    logLines.forEach(line => {
-        const match = line.match(/Bind variable (\d+): ([^,]+)/);
-        if (match) {
-            const varNumber = parseInt(match[1], 10);
-            const varValue = match[2].trim();
-            variables[varNumber] = varValue;
-        }
-    });
-
-    // Заменяем переменные в SQL-запросе, сохраняя разделители (например, запятые)
-    let isFirstVariableProcessed = false;
-    return sql.replace(/(,?\s*):(\d+)/g, (fullMatch, prefix, varNumStr) => {
-        const varNumber = parseInt(varNumStr, 10);
-
-        if (!isFirstVariableProcessed) {
-            isFirstVariableProcessed = true;
-            if (varNumber === 1) {
-                // Удаляем переменную вместе с предшествующей запятой/пробелами, если это необходимо
-                return '';
+        window.onload = function() {
+            clearInputOutput();
+            updateCopyIconVisibility();
+        };
+        
+        function updateCopyIconVisibility() {
+            const outputSql = document.getElementById('outputSql').value;
+            const copyIcon = document.getElementById('copyIcon');
+            if (outputSql) {
+                copyIcon.style.display = 'block';
+            } else {
+                copyIcon.style.display = 'none';
             }
         }
-
-        const value = variables[varNumber];
-        // Если значение не найдено, оставляем исходный плейсхолдер
-        if (!value) {
-            return fullMatch;
+        
+        function clearInputOutput() {
+            document.getElementById('inputSql').value = '';
+            document.getElementById('outputSql').value = '';
         }
-        // Если значение является числом, возвращаем его как есть, иначе оборачиваем в одинарные кавычки
-        return prefix + (isNaN(value) ? `'${value}'` : value);
-    });
-}
+        
+        function processQuery() {
+            const input = document.getElementById('inputSql').value;
+            const output = processSQLWithLogs(input);
+            document.getElementById('outputSql').value = output;
+            updateCopyIconVisibility();
+        }
+        
+        function copyToClipboard() {
+            const outputSql = document.getElementById('outputSql').value;
+            // Используем современный API для копирования, если доступен и контекст безопасный
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(outputSql)
+                    .then(() => {
+                        console.log('Скопировано в буфер обмена.');
+                    })
+                    .catch(err => {
+                        console.error('Ошибка при копировании: ', err);
+                    });
+            } else {
+                // Фолбэк-метод для небезопасного контекста
+                const textArea = document.createElement("textarea");
+                textArea.value = outputSql;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    console.log('Скопировано в буфер обмена.');
+                } catch (err) {
+                    console.error('Ошибка при копировании: ', err);
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+        
+        function processSQLWithLogs(input) {
+            // Разделяем ввод на SQL запрос и логи по разделителю "ObjMgrSqlLog"
+            const separatorIndex = input.indexOf("ObjMgrSqlLog");
+            if (separatorIndex === -1) {
+                // Если разделитель не найден, возвращаем исходный ввод
+                return input;
+            }
+            const sql = input.substring(0, separatorIndex).trim();
+            const logs = input.substring(separatorIndex);
+        
+            // Разбиваем логи на строки и отбираем те, где присутствует 'Bind variable'
+            const logLines = logs.split('\n').filter(line => line.includes('Bind variable'));
+        
+            // Объект для хранения переменных
+            const variables = {};
+        
+            // Извлекаем значения bind-переменных из логов, теперь захватываем всё после двоеточия
+            logLines.forEach(line => {
+                const match = line.match(/Bind variable (\d+):\s*(.+)/);
+                if (match) {
+                    const varNumber = parseInt(match[1], 10);
+                    const varValue = match[2].trim();
+                    variables[varNumber] = varValue;
+                }
+            });
+        
+            // Заменяем переменные в SQL-запросе, сохраняя разделители (например, запятые)
+            let isFirstVariableProcessed = false;
+            return sql.replace(/(,?\s*):(\d+)/g, (fullMatch, prefix, varNumStr) => {
+                const varNumber = parseInt(varNumStr, 10);
+        
+                if (!isFirstVariableProcessed) {
+                    isFirstVariableProcessed = true;
+                    if (varNumber === 1) {
+                        // Удаляем первую переменную вместе с предшествующими разделителями, если это необходимо
+                        return '';
+                    }
+                }
+        
+                const value = variables[varNumber];
+                // Если значение не найдено, оставляем исходный плейсхолдер
+                if (value === undefined) {
+                    return fullMatch;
+                }
+                // Если значение является числом, возвращаем его как есть, иначе оборачиваем в одинарные кавычки
+                return prefix + (isNaN(value) ? `'${value}'` : value);
+            });
+        }
     </script>
 </body>
 </html>
